@@ -1,26 +1,25 @@
 #!/bin/bash
 
-# Author: Nils Grundmann
-# Version: 0.3
-
-# Changelog:
-# 20160912: [1] and [2] now usable - needs further testing; changed name of range files
-# 20160913: Text changes; Added 'help menu' - needs text; new line as function
-#
+# Author: Nils Grundmann - 'ngrundmann'
+# Version: 0.3.1
 
 ### Global Variables
+##### define static variables
 
 DATE=`date +%s`
 DATE_HUMAN=`date +%F`
 
-ES_JSON_NUMBER=0
+ELASTIC_NUMBER=0
+
+### Global functions
+##### set functions for date and directories
 
 nl() {
 echo ""
 }
 
 var_file_timestamp() {
-FILE_TIMESTAMP=`grep -o "\"date\":\ \"[0-9]\{10\}\"" <<< $ES_JSON | cut -f 4 -d "\""`
+FILE_TIMESTAMP=`grep -o "\"date\":\ \"[0-9]\{10\}\"" <<< $ELASTIC | cut -f 4 -d "\""`
 }
 
 var_filepath() {
@@ -64,6 +63,7 @@ fi
 }
 
 ### Getting input
+##### set functions for grabbing input from user
 
 get_listname() {
 read -p "Please provide a group name: " LISTNAME
@@ -90,6 +90,7 @@ read -e -p "Please provide a converted 'JSON' file: " FILENAME_JSON_CONVERTED
 }
 
 ### Start
+##### grab information from user
 
 start() {
 nl
@@ -109,9 +110,9 @@ then
 	echo "Checking IP's from $FILENAME_IP"
 fi
 
-if [ -n "$FILENAME_JSON" ]
+if [ -n "$FILENAME_OUTPUT" ]
 then
-	echo "Using JSON file $FILENAME_JSON"
+	echo "Using JSON file $FILENAME_OUTPUT"
 fi
 
 sleep 2
@@ -145,7 +146,7 @@ echo "Starting now..."
 nl
 }
 
-### Creating working directories
+### Create working directories
 
 create_wd() {
 if [ ! -d $FILEPATH ]
@@ -170,6 +171,7 @@ sleep 1
 }
 
 ### Find ranges for IP's
+##### grab, sort and filter ranges from input
 
 find_ranges() {
 for IP in $(cat $FILENAME_IP)
@@ -185,6 +187,7 @@ sleep 1
 }
 
 ### Banner grabbing for ranges and save as JSON
+##### run masscan with banner grabbing
 
 banner_grabbing() {
 for RANGE in $(cat $FILENAME_RANGE)
@@ -198,9 +201,10 @@ sleep 1
 }
 
 ### Convert JSON output for Elastic
+##### convert JSON output from masscan to readable JSON output for Elastic
 
 convert_json() {
-for DOC in $FILENAME_JSON
+for DOC in $FILENAME_OUTPUT
 do
 	sed -i 's/\ \ \ /\ /g' $DOC
 	sed -i 's/\"ports\"\:\ \[\ {//' $DOC
@@ -211,12 +215,13 @@ do
 	sed -i '/^{[[:print:]]*\ [0-9]}/d' $DOC
 done
 
-FILENAME_JSON_CONVERTED=$FILENAME_JSON
+FILENAME_OUTPUT_CONVERTED=$FILENAME_OUTPUT
 
 sleep 1
 }
 
 ### Import data to Elastic
+##### create schema and import data to Elastic
 
 import() {
 curl -XPUT http://localhost:9200/masscan/_mapping/$LISTNAME?pretty -d '
@@ -235,15 +240,15 @@ curl -XPUT http://localhost:9200/masscan/_mapping/$LISTNAME?pretty -d '
   }
 }'
 
-for DOC in $FILENAME_JSON_CONVERTED
+for DOC in $FILENAME_OUTPUT_CONVERTED
 do
-	while read ES_JSON
+	while read ELASTIC
 	do
 		var_file_timestamp
 
-		curl -XPOST http://localhost:9200/masscan/$LISTNAME/${LISTNAME}_${FILE_TIMESTAMP}_${ES_JSON_NUMBER}?pretty -d "$ES_JSON"
+		curl -XPOST http://localhost:9200/masscan/$LISTNAME/${LISTNAME}_${FILE_TIMESTAMP}_${ELASTIC_NUMBER}?pretty -d "$ELASTIC"
 
-		let "ES_JSON_NUMBER++"
+		let "ELASTIC_NUMBER++"
 
 	done < $DOC
 done
@@ -256,6 +261,7 @@ echo "HELP MENU"
 }
 
 ### Start options
+##### call functions
 
 start_options() {
 case $OPTION in
@@ -335,6 +341,7 @@ esac
 }
 
 ### Start
+##### output for user
 
 echo "Welcome!"
 
